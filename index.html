@@ -427,7 +427,10 @@ const imgRow = (p,extra="",tail="") => `<div class="f"><img class="thumb" alt=""
 function adRender(){
   const box = $("ad"), top = box.scrollTop;
   const mv = i => btn("up","↑","news",i) + btn("dn","↓","news",i);
+  const pub = PUB(), pf = (k,ph,t="text") => `<input data-pub="${k}" type="${t}" autocomplete="off" placeholder="${ph}" value="${esc(pub[k]||"")}">`;
   box.innerHTML = `
+  <h4>☁️ เผยแพร่ให้ทุกคนเห็น (GitHub)</h4><div class="ar"><p class="mut" style="font-size:13px">กรอกครั้งเดียว แล้วกด "บันทึก" ระบบจะอัปเดต config.json ใน GitHub ให้เอง ผู้ใช้คนอื่นจึงเห็นการแก้ไข · token สร้างแบบ Fine-grained เลือกเฉพาะ repo ของเว็บ สิทธิ์ Contents: Read and write · เก็บไว้ในเบราว์เซอร์เครื่องนี้เท่านั้น</p>
+    ${pf("repo","Repo เช่น ชื่อผู้ใช้/ชื่อrepo")}${pf("branch","Branch (เว้นว่าง = main)")}${pf("token","GitHub token","password")}</div>
   <h4>🚀 Launcher</h4><div class="ar">${imgRow("launcherImg", fld("launcher","ลิงก์ดาวน์โหลด Launcher https://..."))}
     ${fld("launcherText","คำอธิบาย Launcher (ไทย)",{tag:1})}${fld("launcherTextEn","Launcher description (EN, ไม่บังคับ)",{tag:1})}</div>
   <h4>🔗 ลิงก์ Discord</h4><div class="ar">${fld("invite","ลิงก์เชิญ Discord")}</div>
@@ -448,7 +451,9 @@ function adRender(){
 function openAdmin(){ if(!isOwner) return; D = structuredClone(S); adRender(); $("amsg").textContent = ""; $("adm").showModal(); }
 
 $("ad").oninput = e => {                  // พิมพ์ → เขียนลง D ตาม data-p
-  const t = e.target, p = t.dataset.p; if(!p) return;
+  const t = e.target, p = t.dataset.p;
+  if(t.dataset.pub){ const c = PUB(); c[t.dataset.pub] = t.value.trim(); save("dpub",JSON.stringify(c)); return; }
+  if(!p) return;
   setP(p, t.type=="checkbox" ? t.checked : t.value);
   if(/img$/i.test(p)){ const m = t.closest(".ar").querySelector(".thumb"); if(m) m.src = t.value || "data:,"; }
 };
@@ -487,12 +492,26 @@ $("arest").onchange = async e => {         // กู้คืนจากไฟ�
   e.target.value = "";
 };
 $("acancel").onclick = () => $("adm").close();
-$("asave").onclick = () => {
+const PUB = () => { try{ return JSON.parse(localStorage.getItem("dpub")) || {} }catch{ return {} } };
+const b64 = t => { const a = new TextEncoder().encode(t); let r = ""; for(let i=0; i<a.length; i+=8192) r += String.fromCharCode(...a.subarray(i,i+8192)); return btoa(r); };
+async function publish(obj){               // อัปเดต config.json ใน GitHub (คืน false ถ้ายังไม่ได้ตั้งค่า)
+  const c = PUB(); if(!c.repo || !c.token) return false;
+  const u = `https://api.github.com/repos/${c.repo}/contents/config.json`, br = c.branch || "main";
+  const H = {Authorization:"Bearer "+c.token, Accept:"application/vnd.github+json"};
+  const g = await fetch(u+"?ref="+encodeURIComponent(br),{headers:H});
+  if(g.status!=404 && !g.ok) throw new Error(g.status==401||g.status==403 ? "token ไม่ถูกต้องหรือไม่มีสิทธิ์" : "HTTP "+g.status);
+  const r = await fetch(u,{method:"PUT",headers:H,body:JSON.stringify({message:"update config from admin", content:b64(JSON.stringify(obj,null,1)), branch:br, sha:g.ok ? (await g.json()).sha : undefined})});
+  if(!r.ok) throw new Error(r.status==404 ? "ไม่พบ repo/branch" : r.status==401||r.status==403 ? "token ไม่ถูกต้องหรือไม่มีสิทธิ์" : "HTTP "+r.status);
+  return true;
+}
+$("asave").onclick = async () => {
   if(!isOwner) return;
-  D.updated = Date.now(); applyCfg(D); go(curTab());
-  save("dsite",JSON.stringify(S)); dl(S,"config.json");      // จำไว้ในเครื่องแอดมิน + ดาวน์โหลดไปอัปโหลดขึ้นเว็บ
-  const m = $("amsg"); m.className = "msg ok";
-  m.textContent = "บันทึกในหน้านี้แล้ว และดาวน์โหลด config.json เรียบร้อย 💗 เพื่อให้ข้อมูลอยู่ถาวรบน GitHub Pages ให้อัปโหลด config.json ไปยัง repo โฟลเดอร์เดียวกับ index.html (เว็บแบบ Static ยังบันทึกลง GitHub อัตโนมัติไม่ได้)";
+  const m = $("amsg"); D.updated = Date.now(); applyCfg(D); go(curTab()); save("dsite",JSON.stringify(S));   // จำไว้ในเครื่องแอดมินด้วย
+  m.className = "msg"; m.textContent = "กำลังบันทึก...";
+  try{
+    if(await publish(S)){ m.className = "msg ok"; m.textContent = "เผยแพร่ขึ้น GitHub แล้ว 💗 ผู้ใช้คนอื่นจะเห็นภายใน 1–2 นาที (รอเว็บอัปเดต)"; return; }
+    dl(S,"config.json"); m.className = "msg ok"; m.textContent = "ยังไม่ได้ตั้งค่า GitHub: บันทึกในเครื่องนี้แล้ว และดาวน์โหลด config.json ให้ ต้องอัปโหลดไฟล์นี้ขึ้นเว็บเอง คนอื่นถึงจะเห็น";
+  }catch(e){ dl(S,"config.json"); m.className = "msg err"; m.textContent = "เผยแพร่ขึ้น GitHub ไม่สำเร็จ ("+e.message+") ตรวจ repo / branch / token แล้วลองใหม่ ระหว่างนี้ดาวน์โหลด config.json ให้แล้ว"; }
 };
 
 /* ============================================================
