@@ -540,7 +540,7 @@ document.addEventListener("pointerdown", e => {
   if((b.dataset.tab || b.dataset.go) && !matchMedia("(prefers-reduced-motion:reduce)").matches)
     for(let i=0; i<6; i++){
       const p = document.createElement("span"), a = Math.random()*Math.PI*2, r2 = 40+Math.random()*50;
-      p.className = "burst"; p.textContent = ["💎","✨","💗","⭐"][i%4]; p.style.left = e.clientX+"px"; p.style.top = e.clientY+"px";
+      p.className = "burst"; p.textContent = ["","🍭","🍡","🍥"][i%4]; p.style.left = e.clientX+"px"; p.style.top = e.clientY+"px";
       p.style.setProperty("--bx", Math.cos(a)*r2+"px"); p.style.setProperty("--by", Math.sin(a)*r2-20+"px"); p.style.setProperty("--br", (Math.random()*360-180)+"deg");
       document.body.appendChild(p); setTimeout(() => p.remove(), 850);
     }
